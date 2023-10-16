@@ -1,0 +1,126 @@
+-- 1. What is the total amount each customer spent at the restaurant? 
+      A-£14, B-£12, C-£9
+    Select customer_ID, Sum(product_ID) AS total_spending
+    From Sales
+    Group By customer_ID    
+
+-- 2. How many days has each customer visited the restaurant?
+      A-1 B-1
+     Select customer_ID, Count(Distinct join_date) AS days_visited
+     From Members
+     Group By customer_ID
+
+-- 3. What was the first item from the menu purchased by each customer?
+      A - Curry, B - Curry, C - Ramen 
+
+      SELECT customer_id, MIN(order_date) AS first_purchase_date, MIN(product_name) AS first_purchase_item
+      FROM sales
+      JOIN menu ON sales.product_id = menu.product_id
+      GROUP BY customer_id;
+
+      
+
+-- 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
+     Ramen - 8 times purchased 
+     SELECT m.product_id, m.product_name, COUNT(s.product_id) AS purchase_count
+     FROM sales s
+     JOIN menu m ON s.product_id = m.product_id
+     GROUP BY m.product_id, m.product_name
+     ORDER BY purchase_count DESC
+     LIMIT 1;
+      
+
+-- 5. Which item was the most popular for each customer?
+     A - Ramen (3) B - All (2) C - Ramen (3)
+
+      Select s.customer_id, m.product_id, m.product_name,
+MAX(order_count) as max_order_count
+From sales s
+Join (
+Select s.customer_id, s.product_id, Count(*) as order_count 
+from sales s
+Group By s.customer_id, s.product_id
+)
+customer_product_counts ON s.customer_id = customer_product_counts.customer_id
+join (
+Select product_id, product_name 
+from Menu 
+) m ON
+customer_product_counts.product_id = m.product_id
+Group By s.customer_id, m.product_id, m.product_name;
+      
+-- 6. Which item was purchased first by the customer after they became a member?
+      
+
+SELECT s.customer_id, s.order_date 
+FROM sales s 
+JOIN ( 
+   SELECT customer_id, 
+MIN(order_date) AS 
+first_purchase_date 
+   FROM sales 
+   GROUP BY customer_id 
+) fp ON s.customer_id = fp.customer_id 
+AND s.order_date = fp.first_purchase_date 
+JOIN members m ON s.customer_id = m.customer_id 
+WHERE s.order_date >= m.join_date;
+
+-- 7. Which item was purchased just before the customer became a member?
+    A - 1, A - 2, B - 1
+
+SELECT s.customer_id, s.product_id
+FROM sales s
+LEFT JOIN members m ON s.customer_id = m.customer_id
+WHERE (s.order_date < m.join_date OR m.join_date IS NULL)
+AND s.order_date = (
+    SELECT MAX(order_date)
+    FROM sales
+    WHERE customer_id = s.customer_id
+    AND order_date < m.join_date
+)
+GROUP BY s.customer_id, s.product_id;
+
+
+-- 8. What is the total items and amount spent for each member before they became a member?
+A 2 items = 25, B- 3 items = 40, C- 3 items = 36
+SELECT s.customer_id, 
+       COUNT(s.product_id) AS total_items_purchased,
+       SUM(me.price) AS total_amount_spent
+FROM sales s
+LEFT JOIN menu me ON s.product_id = me.product_id
+LEFT JOIN members m ON s.customer_id = m.customer_id
+WHERE s.order_date < m.join_date OR m.join_date IS NULL
+GROUP BY s.customer_id;
+
+-- 9.  If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
+A- 860 points, B- 940 points, C- 360 points
+
+SELECT
+    s.customer_id,
+    SUM(
+        CASE
+            WHEN me.product_name = 'sushi' THEN (2 * me.price)
+            ELSE me.price
+        END * 10
+    ) AS total_points
+FROM sales s
+LEFT JOIN menu me ON s.product_id = me.product_id
+GROUP BY s.customer_id;
+
+-- 10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi - how many points do customer A and B have at the end of January?
+
+A- 1520 points, B- 1360 points 
+
+SELECT
+    m.customer_id,
+    SUM(
+        CASE
+            WHEN s.order_date <= DATE_ADD(m.join_date, INTERVAL 1 WEEK) THEN (2 * me.price)
+            ELSE me.price
+        END * 10
+    ) AS total_points
+FROM sales s
+INNER JOIN members m ON s.customer_id = m.customer_id
+INNER JOIN menu me ON s.product_id = me.product_id
+WHERE s.order_date <= '2023-01-31' -- Assuming '2023-01-31' is the end of January
+GROUP BY m.customer_id;
